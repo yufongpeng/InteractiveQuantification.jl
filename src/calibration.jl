@@ -12,10 +12,10 @@ function inv_predict(cal::Calibration, y::AbstractArray)
         y ./ β[1]
     elseif cal.type
         (y .- β[1]) ./ β[2]
-    elseif cal.zero
-        (-β[1] .+ sqrt.(β[1] ^ 2 .+ 4 .* β[2] .* y)) ./ 2 ./ β[2]
     else
-        (-β[2] .+ sqrt.(β[2] ^ 2 .+ 4 .* β[3] .* (y .- β[1]))) ./ 2 ./ β[2]
+        c, b, a = cal.zero ? (0, β...) : β
+        d = @. max(b ^ 2 + 4 * a * (y - c), 0)
+        @. (-b + sqrt(d)) / 2a
     end
 end
 
