@@ -11,7 +11,7 @@ function plot_cal!(project::Project;
     menu_point = Menu(fig, options = string.(0:length(unique(project.calibration.source.x))), default = "0")
     label_r2 = Label(fig, "R² = $(round(r2(project.calibration.model); sigdigits = 4))"; halign = :left)
     label_formula = Label(fig, formula_repr(project.calibration); halign = :left)
-    menu_obj = Menu(fig, options = ["Cal", "Sample"], default = "Cal"; width = 70)
+    menu_obj = Menu(fig, options = ["Cal", "Sample", "Fig"], default = "Cal"; width = 70)
     button_show = Button(fig, label = "show")
     button_save = Button(fig, label = "save")
     fig[1, 2] = vgrid!(
@@ -122,7 +122,9 @@ function plot_cal!(project::Project;
         end
     end
     on(button_show.clicks) do s
-        if menu_obj.selection[] == "Cal"
+        if menu_obj.selection[] == "Fig"
+            return
+        elseif menu_obj.selection[] == "Cal"
             display(view_cal(project.calibration.source; lloq_multiplier, dev_acc))
         else
             display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
@@ -130,6 +132,12 @@ function plot_cal!(project::Project;
         #Main.vscodedisplay(project.calibration.source[project.calibration.source.include])
     end
     on(button_save.clicks) do s
+        if menu_obj.selection[] == "Fig"
+            save_dialog("Save as", nothing, ["*.png"]; start_folder = pwd()) do f
+                save(f, fig; update = false)
+            end
+            return
+        end
         save_dialog("Save as", nothing, ["*.csv"]; start_folder = pwd()) do f
             if menu_obj.selection[] == "Cal"
                 CSV.write(f, project.calibration.source)

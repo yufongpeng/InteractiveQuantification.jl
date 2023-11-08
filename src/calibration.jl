@@ -27,10 +27,11 @@ function calibration(tbl::Table;
     id = findall(x -> isa(x, Number), tbl.y)
     tbl = tbl[id]
     source = :id in propertynames(tbl) ? tbl : Table((; id = collect(1:length(tbl)), ), tbl)
+    source = :include in propertynames(tbl) ? source : Table(source; include = trues(length(source)))
     f = get_formula(type, zero)
-    model = lm(f, source; wts = source.x .^ weight)
+    model = lm(f, source[source.include]; wts = source.x[source.include] .^ weight)
     xlevel = unique(source.x)
-    source = Table(source; level = [findfirst(x -> i == x, xlevel) for i in source.x], include = trues(length(source)), x̂ = zeros(Float64, length(source)), accuracy = zeros(Float64, length(source)))
+    source = Table(; id = source.id, level = [findfirst(x -> i == x, xlevel) for i in source.x], y = source.y, x = source.x, x̂ = zeros(Float64, length(source)), accuracy = zeros(Float64, length(source)), include = source.include)
     cal = Calibration(type, zero, weight, f, source, model)
     cal.source.x̂ .= inv_predict(cal, source)
     cal.source.accuracy .= cal.source.x̂ ./ source.x
