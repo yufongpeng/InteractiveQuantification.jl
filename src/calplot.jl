@@ -133,19 +133,18 @@ function plot_cal!(project::Project;
     end
     on(button_save.clicks) do s
         if menu_obj.selection[] == "Fig"
-            save_dialog("Save as", nothing, ["*.png"]; timeout = 1, start_folder = pwd()) do f
+            save_dialog("Save as", nothing, ["*.png"]; start_folder = pwd()) do f
                 save(f, fig; update = false)
             end
             return
-        end
-        save_dialog("Save as", nothing, ["*.csv"]; start_folder = pwd()) do f
-            if menu_obj.selection[] == "Cal"
-                CSV.write(f, project.calibration.source)
-                name = basename(f)
-                dir = dirname(f)
-                config_path = joinpath(dir, "(CONFIG)$name")
-                CSV.write(config_path, Table(; type = [project.calibration.type], zero = [project.calibration.zero], weight = [project.calibration.weight]))
-            else
+        elseif menu_obj.selection[] == "Cal"
+            save_dialog("Save as", nothing, ["*.cal"]; start_folder = pwd()) do f
+                basename(f) in readdir(dirname(f)) || mkdir(f)
+                CSV.write(joinpath(f, "calibration.csv"), project.calibration.source)
+                CSV.write(joinpath(f, "config.csv"), Table(; type = [project.calibration.type], zero = [project.calibration.zero], weight = [project.calibration.weight]))
+            end   
+        else
+            save_dialog("Save as", nothing, ["*.csv"]; start_folder = pwd()) do f
                 CSV.write(f, project.sample)
             end
         end

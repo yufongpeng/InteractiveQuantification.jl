@@ -20,11 +20,8 @@ function inv_predict(cal::Calibration, y::AbstractArray)
 end
 
 function calibration(file::String)
-    name = basename(file)
-    dir = dirname(file)
-    config_path = joinpath(dir, "(CONFIG)$name")
-    tbl = CSV.read(file, Table)
-    config_kw, config_vl = eachline(config_path)
+    tbl = CSV.read(joinpath(file, "calibration.csv"), Table)
+    config_kw, config_vl = eachline(joinpath(file, "config.csv"))
     config = Dict{Symbol, Any}()
     for (k, v) in zip(split(config_kw, ","), split(config_vl, ","))
         if k == "type" || k == "zero"
