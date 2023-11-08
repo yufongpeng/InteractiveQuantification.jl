@@ -19,6 +19,26 @@ function inv_predict(cal::Calibration, y::AbstractArray)
     end
 end
 
+function calibration(file::String)
+    name = basename(file)
+    dir = dirname(file)
+    config_path = joinpath(dir, "(CONFIG)$name")
+    tbl = CSV.read(file, Table)
+    config_kw, config_vl = readlines(config_path)
+    config = Dict{Symbol, Any}()
+    for (k, v) in zip(config_kw, config_vl)
+        if k == "type" || k == "zero"
+            v = parse(Bool, v)
+        elseif k == "weight"
+            v = parse(Float64, v)
+        else
+            continue
+        end
+        push!(config, Symbol(k) => v)
+    end
+    calibration(tbl; config...)
+end
+
 function calibration(tbl::Table; 
                     type = true, 
                     zero = false, 
@@ -43,11 +63,22 @@ function refit!(cal::Calibration)
     cal
 end
 
-function project(cal::Table, sample::Table; 
+project(cal::Table, sample = ""; 
         type = true, 
         zero = false, 
-        weight = 0)
-    cal = calibration(cal; type, zero, weight)
-    sample = Table(sample; x̂ = inv_predict(cal, sample))
+        weight = 0) = project(calibration(cal; type, zero, weight), sample)
+
+project(cal::String, sample = "") = project(calibration(cal), sample)
+
+function project(cal::Calibration, sample = "")
+    sample = if sample == ""
+        sample = Table(; id = String[], y = Float64[])
+        Table(sample; x̂ = inv_predict(cal, sample))
+    elseif sample isa String
+        sample = CSV.read(sample, Table)
+        Table(sample; x̂ = inv_predict(cal, sample))
+    else
+        sample
+    end
     Project(cal, sample)
 end
