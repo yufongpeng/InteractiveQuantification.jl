@@ -24,6 +24,8 @@ function calibration(tbl::Table;
                     zero = false, 
                     weight = 0
                     )
+    id = findall(x -> isa(x, Number), tbl.y)
+    tbl = tbl[id]
     source = :id in propertynames(tbl) ? tbl : Table((; id = collect(1:length(tbl)), ), tbl)
     f = get_formula(type, zero)
     model = lm(f, source; wts = source.x .^ weight)

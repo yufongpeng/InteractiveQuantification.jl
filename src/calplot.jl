@@ -41,7 +41,7 @@ function plot_cal!(project::Project;
     xlevel = unique(project.calibration.source.x)
     xscale = -reduce(-, extrema(xlevel))
     yscale = -reduce(-, extrema(project.calibration.source.y))
-    xrange = Table(; x = LinRange(extrema(xlevel)..., reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100))
+    xrange = Table(; x = LinRange(extrema(xlevel)..., convert(Int, reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100)))
     ln = lines!(ax, xrange.x, predict(project.calibration.model, xrange); get!(plot_attr, :line, Dict(:color => :chartreuse))...)
     display(view_cal(project.calibration.source; lloq_multiplier, dev_acc))
     #display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
