@@ -155,6 +155,7 @@ end
 
 get_point_attr(plot_attr::Dict, incl::Bool) = NamedTuple(k => incl ? v[1] : v[2] for (k, v) in get!(plot_attr, :point, Dict(:color => [:blue, :red])))
 get_point_attr(plot_attr::Dict, incl::BitVector) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], incl) : v for (k, v) in get!(plot_attr, :point, Dict(:color => [:blue, :red])))
+get_point_attr(plot_attr::Dict, incl::Vector{Bool}) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], incl) : v for (k, v) in get!(plot_attr, :point, Dict(:color => [:blue, :red])))
 
 function weight_repr(cal::Calibration)
     cal.weight in [-0.5, -1, -2] || (cal.weight = 0)
