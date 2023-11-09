@@ -114,7 +114,7 @@ function plot_cal!(project::Project;
             x_value = xlevel[s] 
             id = findall(==(x_value), project.calibration.source.x)
             y_value = project.calibration.source.y[id]
-            Δy = -reduce(-, extrema(y_value))
+            Δy = length(y_value) == 1 ? 0.2 * y_value[1] : -reduce(-, extrema(y_value))
             yl = extrema(y_value) .+ (-Δy, Δy)
             Δx = Δy * xscale / yscale
             xl = x_value .+ (-Δx, Δx)

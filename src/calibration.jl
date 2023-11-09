@@ -47,6 +47,12 @@ function calibration(tbl::Table;
     source = :include in propertynames(tbl) ? source : Table(source; include = trues(length(source)))
     f = get_formula(type, zero)
     model = lm(f, source[source.include]; wts = source.x[source.include] .^ weight)
+    if !type && !zero && model.model.pp.beta0[1] == 0
+        m = hcat(ones(Float64, count(source.include)), source.x[source.include], source.x[source.include] .^ 2)
+        sqrtw = diagm(sqrt.(source.x[source.include] .^ weight))
+        y = source.y[source.include]
+        model.model.pp.beta0 = (sqrtw * m) \ (sqrtw * y)
+    end 
     xlevel = unique(source.x)
     source = Table(; id = source.id, level = [findfirst(x -> i == x, xlevel) for i in source.x], y = source.y, x = source.x, x̂ = zeros(Float64, length(source)), accuracy = zeros(Float64, length(source)), include = source.include)
     cal = Calibration(type, zero, weight, f, source, model)
@@ -57,6 +63,12 @@ end
 
 function refit!(cal::Calibration)
     cal.model = lm(cal.formula, cal.source[cal.source.include]; wts = cal.source.x[cal.source.include] .^ cal.weight)
+    if !cal.type && !cal.zero && cal.model.model.pp.beta0[1] == 0
+        m = hcat(ones(Float64, count(cal.source.include)), cal.source.x[cal.source.include], cal.source.x[cal.source.include] .^ 2)
+        sqrtw = diagm(sqrt.(cal.source.x[cal.source.include] .^ cal.weight))
+        y = cal.source.y[cal.source.include]
+        cal.model.model.pp.beta0 = (sqrtw * m) \ (sqrtw * y)
+    end 
     cal
 end
 
