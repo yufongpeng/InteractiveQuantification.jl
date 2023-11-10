@@ -2,7 +2,15 @@ function plot_cal!(project::Project;
                     lloq_multiplier = 4//3, dev_acc = 0.15,
                     fig_attr = Dict{Symbol, Any}(), 
                     axis_attr = Dict(:title => "Analyte", :xlabel => "Concentration (nM)", :ylabel => "Abundance", :titlesize => 20), 
-                    plot_attr = Dict(:point => Dict(:color => [:blue, :red], :inspector_label => (self, i, p) -> string("id: ", project.calibration.source.id[i], "\naccuracy: ", round(project.calibration.source.accuracy[i]; sigdigits = 4))), :line => Dict(:color => :chartreuse)))
+                    plot_attr = Dict(
+                                    :point => Dict(
+                                        :color => [:blue, :red], 
+                                        :inspector_label => (self, i, p) -> string("id: ", project.calibration.source.id[i], 
+                                                                                    "\nlevel: ", project.calibration.source.level[i], 
+                                                                                    "\naccuracy: ", round(project.calibration.source.accuracy[i]; sigdigits = 4))
+                                                    ), 
+                                    :line => Dict(:color => :chartreuse))
+                    )
     fig = Figure(; fig_attr...)
     menu_type = Menu(fig, options = ["linear", "quadratic"], default = project.calibration.type ? "linear" : "quadratic")
     menu_zero = Menu(fig, options = ["ignore (0, 0)", "include (0, 0)"], default = project.calibration.zero ? "include (0, 0)" : "ignore (0, 0)")
@@ -41,12 +49,21 @@ function plot_cal!(project::Project;
     xlevel = unique(project.calibration.source.x)
     xscale = -reduce(-, extrema(xlevel))
     yscale = -reduce(-, extrema(project.calibration.source.y))
-    xrange = Table(; x = LinRange(extrema(xlevel)..., convert(Int, reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100)))
+    xrange = Table(; x = collect(LinRange(extrema(xlevel)..., convert(Int, reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100))))
     ln = lines!(ax, xrange.x, predict(project.calibration.model, xrange); get!(plot_attr, :line, Dict(:color => :chartreuse))...)
     display(view_cal(project.calibration.source; lloq_multiplier, dev_acc))
     #display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
     # Main.vscodedisplay(project.calibration.source[project.calibration.source.include])
     # fig[1, 3] = vgrid!(map(s -> Label(fig, s; halign = :left), split(sprint(showtable, project.calibration.source), "\n"))...; tellheight = false, width = 250)
+    function update!()
+        calfit!(project.calibration)
+        ln.input_args[2][] = predict(project.calibration.model, xrange)
+        project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
+        project.calibration.source.accuracy .=  project.calibration.source.x̂ ./ project.calibration.source.x
+        label_r2.text = "R² = $(round(r2(project.calibration.model); sigdigits = 4))"
+        label_formula.text = formula_repr(project.calibration)
+        project.sample.x̂ .= inv_predict(project.calibration, project.sample)
+    end
     on(events(ax).mousebutton) do event
         if event.action == Mouse.press
             plot, id = pick(ax)
@@ -56,14 +73,7 @@ function plot_cal!(project::Project;
                     for (k, v) in pairs(get_point_attr(plot_attr, project.calibration.source.include))
                         getproperty(scs, k)[] = v
                     end
-                    refit!(project.calibration)
-                    ln.input_args[2][] = predict(project.calibration.model, xrange)
-                    project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
-                    project.calibration.source.accuracy .=  project.calibration.source.x̂ ./ project.calibration.source.x
-                    label_r2.text = "R² = $(round(r2(project.calibration.model); sigdigits = 4))"
-                    label_formula.text = formula_repr(project.calibration)
-                    project.sample.x̂ .= inv_predict(project.calibration, project.sample)  
-                    # update_leaf!(tbl, project.calibration.source)
+                    update!()
                 end
             end
         end
@@ -72,39 +82,16 @@ function plot_cal!(project::Project;
     on(menu_type.selection) do s
         project.calibration.type = s == "linear"
         project.calibration.formula = get_formula(project.calibration)
-        refit!(project.calibration)
-        ln.input_args[2][] = predict(project.calibration.model, xrange)
-        project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
-        project.calibration.source.accuracy .=  project.calibration.source.x̂ ./ project.calibration.source.x
-        label_r2.text = "R² = $(round(r2(project.calibration.model); sigdigits = 4))"
-        label_formula.text = formula_repr(project.calibration)
-        project.sample.x̂ .= inv_predict(project.calibration, project.sample)
-        # update_leaf!(tbl, project.calibration.source)
+        update!()
     end
     on(menu_zero.selection) do s
         project.calibration.zero = s == "include (0, 0)"
         project.calibration.formula = get_formula(project.calibration)
-        refit!(project.calibration)
-        ln.input_args[2][] = predict(project.calibration.model, xrange)
-        project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
-        project.calibration.source.accuracy .= project.calibration.source.x̂ ./ project.calibration.source.x
-        label_r2.text = "R² = $(round(r2(project.calibration.model); sigdigits = 4))"
-        label_formula.text = formula_repr(project.calibration)
-        project.sample.x̂ .= inv_predict(project.calibration, project.sample)
-        # update_leaf!(tbl, project.calibration.source)
+        update!()
     end
     on(menu_wt.selection) do s
         project.calibration.weight = weight_value(s)
-        refit!(project.calibration)
-        ln.input_args[2][] = predict(project.calibration.model, xrange)
-        project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
-        project.calibration.source.accuracy .=  project.calibration.source.x̂ ./ project.calibration.source.x
-        label_r2.text = "R² = $(round(r2(project.calibration.model); sigdigits = 4))"
-        label_formula.text = formula_repr(project.calibration)
-        project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
-        project.calibration.source.accuracy .=  project.calibration.source.x̂ ./ project.calibration.source.x
-        project.sample.x̂ .= inv_predict(project.calibration, project.sample)
-        # update_leaf!(tbl, project.calibration.source)
+        update!()
     end
     on(menu_point.selection) do s
         s = parse(Int, s)
@@ -134,18 +121,19 @@ function plot_cal!(project::Project;
     on(button_save.clicks) do s
         if menu_obj.selection[] == "Fig"
             save_dialog("Save as", nothing, ["*.png"]; start_folder = pwd()) do f
-                save(f, fig; update = false)
+                f == "" || save(f, fig; update = false)
             end
             return
         elseif menu_obj.selection[] == "Cal"
             save_dialog("Save as", nothing, ["*.cal"]; start_folder = pwd()) do f
+                f == "" && return
                 basename(f) in readdir(dirname(f)) || mkdir(f)
                 CSV.write(joinpath(f, "calibration.csv"), project.calibration.source)
                 CSV.write(joinpath(f, "config.csv"), Table(; type = [project.calibration.type], zero = [project.calibration.zero], weight = [project.calibration.weight]))
             end   
         else
             save_dialog("Save as", nothing, ["*.csv"]; start_folder = pwd()) do f
-                CSV.write(f, project.sample)
+                f == "" || CSV.write(f, project.sample)
             end
         end
     end
@@ -182,9 +170,15 @@ end
 
 function formula_repr(cal::Calibration)
     β = cal.model.model.pp.beta0
-    if cal.type 
-        cal.zero ? "y = $(round(β[1]; sigdigits = 4))x" : "y = $(round(β[1]; sigdigits = 4)) + $(round(β[1]; sigdigits = 4))x"
+    cal.type && cal.zero && return "y = $(round(β[1]; sigdigits = 4))x"
+    op = map(β[2:end]) do b
+        b < 0 ? " - " : " + "
+    end
+    if cal.type
+        string("y = ", round(β[1]; sigdigits = 4), op[1], abs(round(β[2]; sigdigits = 4)), "x")
+    elseif cal.zero
+        string("y = ", round(β[1]; sigdigits = 4), "x", op[1], abs(round(β[2]; sigdigits = 4)), "x²")
     else
-        cal.zero ? "y = $(round(β[1]; sigdigits = 4))x + $(round(β[1]; sigdigits = 4))x²" : "y = $(round(β[1]; sigdigits = 4)) + $(round(β[2]; sigdigits = 4))x + $(round(β[3]; sigdigits = 4))x²"
+        string("y = ", round(β[1]; sigdigits = 4), op[1], abs(round(β[2]; sigdigits = 4)), "x", op[2], abs(round(β[3]; sigdigits = 4)), "x²")
     end
 end

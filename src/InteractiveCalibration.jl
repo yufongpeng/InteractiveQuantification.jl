@@ -1,7 +1,7 @@
 module InteractiveCalibration
 using GLMakie, GLM, CSV, TypedTables, Plotly, LinearAlgebra
 using Gtk4: save_dialog
-export Calibration, Project, project, calibration, plot_cal!, inv_predict, view_cal, view_sample
+export Calibration, Project, project, calibration, plot_cal!, inv_predict, inv_predict!, view_cal, view_sample, cal_range, lloq, hloq
 
 mutable struct Calibration
     type::Bool
