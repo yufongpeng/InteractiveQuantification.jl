@@ -6,10 +6,14 @@ else
 end
 
 inv_predict(project::Project, tbl) = inv_predict(project.calibration, tbl)
-inv_predict(project::Project) = inv_predict(project.calibration, project.sample)
-function inv_predict!(project::Project)
-    x̂ = inv_predict(project.calibration, project.sample)
-    project.sample.x̂ = x̂
+function inv_predict_sample!(project::Project)
+    project.sample.x̂ .= inv_predict(project.calibration, project.sample)
+    project
+end
+inv_predict_cal!(project::Project) = (inv_predict_cal!(project.calibration); project)
+function inv_predict_cal!(cal::Calibration)
+    cal.source.x̂ .= inv_predict(cal, cal.source)
+    cal
 end
 inv_predict(cal::Calibration, tbl::Table) = inv_predict(cal, getproperty(tbl, cal.formula.lhs.sym))
 function inv_predict(cal::Calibration, y::AbstractArray)
@@ -24,6 +28,17 @@ function inv_predict(cal::Calibration, y::AbstractArray)
         @. (-b + sqrt(d)) / 2a
     end
 end
+
+accuracy(project::Project, tbl = project.calibration.source) = accuracy(project.calibration, tbl)
+accuracy(cal::Calibration, tbl = cal.source) = accuracy(inv_predict(cal, tbl), tbl.x)
+accuracy!(project::Project) = (accuracy!(project.calibration); project)
+function accuracy!(cal::Calibration)
+    cal.source.accuracy .= accuracy(cal.source.x̂, cal.source.x)
+    cal
+end
+accuracy(x̂::AbstractVector, x::AbstractVector) = @. x̂ / x
+
+inv_predict_accuracy! = accuracy! ∘ inv_predict_cal!
 
 function calibration(file::String)
     tbl = CSV.read(joinpath(file, "calibration.csv"), Table)
@@ -56,8 +71,7 @@ function calibration(tbl::Table;
     xlevel = unique(source.x)
     source = Table(; id = source.id, level = [findfirst(x -> i == x, xlevel) for i in source.x], y = source.y, x = source.x, x̂ = zeros(Float64, length(source)), accuracy = zeros(Float64, length(source)), include = source.include)
     cal = Calibration(type, zero, weight, f, source, model)
-    cal.source.x̂ .= inv_predict(cal, source)
-    cal.source.accuracy .= cal.source.x̂ ./ source.x
+    inv_predict_accuracy!(cal)
     cal
 end
 
@@ -97,9 +111,15 @@ function project(cal::Calibration, sample = "")
     Project(cal, sample)
 end
 
+function cretical_point(cal::Calibration)
+    β = cal.model.model.pp.beta0
+    c, b, a = cal.zero ? (0, β...) : β
+    -b / 2a
+end
+
 cal_range(project::Project) = cal_range(project.calibration)
 cal_range(cal::Calibration) = (lloq(cal), hloq(cal))
 lloq(project::Project) = lloq(project.calibration)
 hloq(project::Project) = hloq(project.calibration)
-lloq(cal::Calibration) = cal.source.x[findfirst(cal.source.include)]
-hloq(cal::Calibration) = cal.source.x[findlast(cal.source.include)]
+lloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) < 0) ? cal.source.x[findfirst(cal.source.include)] : max(cal.source.x[findfirst(cal.source.include)], cretical_point(cal))
+hloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) > 0) ? cal.source.x[findlast(cal.source.include)] : min(cal.source.x[findlast(cal.source.include)], cretical_point(cal))

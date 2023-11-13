@@ -1,6 +1,6 @@
 function plot_cal!(project::Project;
                     lloq_multiplier = 4//3, dev_acc = 0.15,
-                    fig_attr = Dict{Symbol, Any}(), 
+                    fig_attr = Dict{Symbol, Any}(:resolution => (1200, 800)), 
                     axis_attr = Dict(:title => "Analyte", :xlabel => "Concentration (nM)", :ylabel => "Abundance", :titlesize => 20), 
                     plot_attr = Dict(
                                     :point => Dict(
@@ -20,6 +20,9 @@ function plot_cal!(project::Project;
     label_r2 = Label(fig, "R² = $(round(r2(project.calibration.model); sigdigits = 4))"; halign = :left)
     label_formula = Label(fig, formula_repr(project.calibration); halign = :left)
     menu_obj = Menu(fig, options = ["Cal", "Sample", "Fig"], default = "Cal"; width = 70)
+    tbt = Textbox(fig, placeholder = "title", tellwidth = false)
+    tbx = Textbox(fig, placeholder = "xlabel", tellwidth = false)
+    tby = Textbox(fig, placeholder = "ylabel", tellwidth = false)
     button_show = Button(fig, label = "show")
     button_save = Button(fig, label = "save")
     fig[1, 2] = vgrid!(
@@ -33,6 +36,7 @@ function plot_cal!(project::Project;
         menu_zero,
         Label(fig, "Weight", width = nothing),
         menu_wt,
+        hgrid!(tbt, tbx, tby),
         hgrid!(menu_obj, button_show, button_save);
         tellheight = false
     )
@@ -58,8 +62,7 @@ function plot_cal!(project::Project;
     function update!()
         calfit!(project.calibration)
         ln.input_args[2][] = predict(project.calibration.model, xrange)
-        project.calibration.source.x̂ .= inv_predict(project.calibration, project.calibration.source)
-        project.calibration.source.accuracy .=  project.calibration.source.x̂ ./ project.calibration.source.x
+        inv_predict_accuracy!(project)
         label_r2.text = "R² = $(round(r2(project.calibration.model); sigdigits = 4))"
         label_formula.text = formula_repr(project.calibration)
         project.sample.x̂ .= inv_predict(project.calibration, project.sample)
@@ -96,7 +99,12 @@ function plot_cal!(project::Project;
     on(menu_point.selection) do s
         s = parse(Int, s)
         if s == 0
-            autolimits!(ax)
+            #autolimits!(ax)
+            xr = cal_range(project)
+            xr = xr .+ (xr[2] - xr[1]) .* (-0.05, 0.05)
+            yr = extrema(project.calibration.source.y[findall(project.calibration.source.include)]) .* ((1 - dev_acc * lloq_multiplier), (1 + dev_acc))
+            yr = yr .+ (yr[2] - yr[1]) .* (-0.05, 0.05)
+            limits!(ax, xr, yr)
         else
             x_value = xlevel[s] 
             id = findall(==(x_value), project.calibration.source.x)
@@ -107,6 +115,15 @@ function plot_cal!(project::Project;
             xl = x_value .+ (-Δx, Δx)
             limits!(ax, xl, yl)
         end
+    end
+    on(tbt.stored_string) do s
+        ax.title = s
+    end
+    on(tbx.stored_string) do s
+        ax.xlabel = s
+    end
+    on(tby.stored_string) do s
+        ax.ylabel = s
     end
     on(button_show.clicks) do s
         if menu_obj.selection[] == "Fig"
