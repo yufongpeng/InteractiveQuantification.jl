@@ -82,6 +82,7 @@ function calfit(tbl::Table, formula, type, zero, weight)
         sqrtw = diagm(sqrt.(tbl.x[tbl.include] .^ weight))
         y = tbl.y[tbl.include]
         model.model.pp.beta0 = (sqrtw * m) \ (sqrtw * y)
+        GLM.updateμ!(model.model.rr, predict(model, tbl[tbl.include]))
     end
     model
 end

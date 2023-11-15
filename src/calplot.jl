@@ -1,9 +1,9 @@
 function plot_cal!(project::Project;
                     lloq_multiplier = 4//3, dev_acc = 0.15,
-                    fig_attr = Dict{Symbol, Any}(:resolution => (1200, 800)), 
+                    fig_attr = Dict{Symbol, Any}(:resolution => (1350, 900)), 
                     axis_attr = Dict(:title => "Analyte", :xlabel => "Concentration (nM)", :ylabel => "Abundance", :titlesize => 20), 
                     plot_attr = Dict(
-                                    :point => Dict(
+                                    :scatter => Dict(
                                         :color => [:blue, :red], 
                                         :inspector_label => (self, i, p) -> string("id: ", project.calibration.source.id[i], 
                                                                                     "\nlevel: ", project.calibration.source.level[i], 
@@ -16,33 +16,21 @@ function plot_cal!(project::Project;
     menu_zero = Menu(fig, options = ["ignore (0, 0)", "include (0, 0)"], default = project.calibration.zero ? "include (0, 0)" : "ignore (0, 0)")
     default_w = weight_repr(project.calibration.weight)
     menu_wt = Menu(fig, options = ["none", "1/√x", "1/x", "1/x²"], default = default_w)
-    menu_point = Menu(fig, options = string.(0:length(unique(project.calibration.source.x))), default = "0")
+    menu_zoom = Menu(fig, options = string.(0:length(unique(project.calibration.source.x))), default = "0")
     label_r2 = Label(fig, "R² = $(round(r2(project.calibration.model); sigdigits = 4))"; halign = :left)
     label_formula = Label(fig, formula_repr(project.calibration); halign = :left)
-    menu_obj = Menu(fig, options = ["Cal", "Sample", "Fig"], default = "Cal"; width = 70)
-    tbt = Textbox(fig, placeholder = "title", tellwidth = false)
-    tbx = Textbox(fig, placeholder = "xlabel", tellwidth = false)
-    tby = Textbox(fig, placeholder = "ylabel", tellwidth = false)
+    menu_show_save = Menu(fig, options = ["Cal", "Sample", "Fig"], default = "Cal"; width = 70)
+    #textbox_title = Textbox(fig, placeholder = "title", tellwidth = false)
+    #textbox_xlabel = Textbox(fig, placeholder = "xlabel", tellwidth = false)
+    #textbox_ylabel = Textbox(fig, placeholder = "ylabel", tellwidth = false)
+    #textbox_command = Textbox(fig, placeholder = "Execute julia command", tellwidth = false)
+    #objs = [:fig, :ax, :sc, :ln, :menu_type, :menu_wt, :menu_zero, :menu_zoom, :menu_show_save, 
+    #        :label_r2, :label_formula, :textbox_title, :textbox_xlabel, :textbox_ylabel, :button_save, :button_show]
     button_show = Button(fig, label = "show")
     button_save = Button(fig, label = "save")
-    fig[1, 2] = vgrid!(
-        label_r2,
-        label_formula,
-        Label(fig, "Zoom", width = nothing),
-        menu_point,
-        Label(fig, "Type", width = nothing),
-        menu_type, 
-        Label(fig, "Zero", width = nothing),
-        menu_zero,
-        Label(fig, "Weight", width = nothing),
-        menu_wt,
-        hgrid!(tbt, tbx, tby),
-        hgrid!(menu_obj, button_show, button_save);
-        tellheight = false
-    )
     ax = Axis(fig[1, 1]; axis_attr...)
-    scs = scatter!(ax, project.calibration.source.x, project.calibration.source.y; get_point_attr(plot_attr, project.calibration.source.include)...)
-    DataInspector(scs)
+    sc = scatter!(ax, project.calibration.source.x, project.calibration.source.y; get_point_attr(plot_attr, project.calibration.source.include)...)
+    DataInspector(sc)
     #=
     for r in project.calibration.source
         sc = scatter!((r.x, r.y); get_point_attr(plot_attr, Val{r.include})...)
@@ -56,6 +44,38 @@ function plot_cal!(project::Project;
     xrange = Table(; x = collect(LinRange(extrema(xlevel)..., convert(Int, reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100))))
     ln = lines!(ax, xrange.x, predict(project.calibration.model, xrange); get!(plot_attr, :line, Dict(:color => :chartreuse))...)
     display(view_cal(project.calibration.source; lloq_multiplier, dev_acc))
+    objs = Dict(:figure => fig, :axis => ax, :scatter => sc, :line => ln, :menu_type => menu_type, :menu_wt => menu_wt, :menu_zero => menu_zero, :menu_zoom => menu_zoom, :menu_show_save => menu_show_save, 
+            :label_r2 => label_r2, :label_formula => label_formula, :button_save => button_save, :button_show => button_show)
+    menu_obj = Menu(fig, options = collect(keys(objs)), default = "axis", halign = :left)
+    button_confirm = Button(fig, label = "confirm", halign = :left)    
+    textbox_attr = Textbox(fig, placeholder = "attribute", tellwidth = false, halign = :left)
+    textbox_value = Textbox(fig, placeholder = "value(julia exoression)", tellwidth = false, halign = :left)
+    fig[1, 2] = vgrid!(
+        label_r2,
+        label_formula,
+        Label(fig, "Zoom", width = nothing),
+        menu_zoom,
+        Label(fig, "Type", width = nothing),
+        menu_type, 
+        Label(fig, "Zero", width = nothing),
+        menu_zero,
+        Label(fig, "Weight", width = nothing),
+        menu_wt,
+        #hgrid!(textbox_title, textbox_xlabel, textbox_ylabel),
+        Label(fig, "Plot setting", width = nothing),
+        menu_obj, 
+        hgrid!(textbox_attr, button_confirm),
+        textbox_value,
+        #textbox_command,
+        Label(fig, "Show and Save", width = nothing),
+        hgrid!(menu_show_save, button_show, button_save);
+        tellheight = false
+    )
+    xr = cal_range(project)
+    xr = xr .+ (xr[2] - xr[1]) .* (-0.05, 0.05)
+    yr = extrema(project.calibration.source.y[findall(project.calibration.source.include)]) .* ((1 - dev_acc * lloq_multiplier), (1 + dev_acc))
+    yr = yr .+ (yr[2] - yr[1]) .* (-0.05, 0.05)
+    limits!(ax, xr, yr)
     #display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
     # Main.vscodedisplay(project.calibration.source[project.calibration.source.include])
     # fig[1, 3] = vgrid!(map(s -> Label(fig, s; halign = :left), split(sprint(showtable, project.calibration.source), "\n"))...; tellheight = false, width = 250)
@@ -70,12 +90,13 @@ function plot_cal!(project::Project;
     on(events(ax).mousebutton) do event
         if event.action == Mouse.press
             plot, id = pick(ax)
-            if id != 0 && plot == scs
+            if id != 0 && plot == sc
                 if event.button == Mouse.left
                     project.calibration.source.include[id] = !project.calibration.source.include[id]
-                    for (k, v) in pairs(get_point_attr(plot_attr, project.calibration.source.include))
-                        getproperty(scs, k)[] = v
-                    end
+                    delete!(ax, sc)
+                    sc = scatter!(ax, project.calibration.source.x, project.calibration.source.y; get_point_attr(plot_attr, project.calibration.source.include)...)
+                    scs = [sc]
+                    DataInspector(sc)
                     update!()
                 end
             end
@@ -96,7 +117,7 @@ function plot_cal!(project::Project;
         project.calibration.weight = weight_value(s)
         update!()
     end
-    on(menu_point.selection) do s
+    on(menu_zoom.selection) do s
         s = parse(Int, s)
         if s == 0
             #autolimits!(ax)
@@ -116,19 +137,27 @@ function plot_cal!(project::Project;
             limits!(ax, xl, yl)
         end
     end
-    on(tbt.stored_string) do s
-        ax.title = s
-    end
-    on(tbx.stored_string) do s
-        ax.xlabel = s
-    end
-    on(tby.stored_string) do s
-        ax.ylabel = s
+    on(button_confirm.clicks) do s
+        if menu_obj.selection[] == :scatter
+            attr = Symbol(textbox_attr.stored_string[])
+            isnothing(attr) && return
+            plot_attr[:scatter][attr] = eval(Meta.parse(textbox_value.stored_string[]))
+            delete!(ax, sc)
+            sc = scatter!(ax, project.calibration.source.x, project.calibration.source.y; get_point_attr(plot_attr, project.calibration.source.include)...)
+            DataInspector(sc)
+            return
+        end
+        x = getproperty(objs[menu_obj.selection[]], Symbol(textbox_attr.stored_string[]))[]
+        if length(vectorize(x)) > 1 
+            setproperty!(objs[menu_obj.selection[]], Symbol(textbox_attr.stored_string[]), repeat([eval(Meta.parse(textbox_value.stored_string[]))], length(x)))
+        else
+            setproperty!(objs[menu_obj.selection[]], Symbol(textbox_attr.stored_string[]), eval(Meta.parse(textbox_value.stored_string[]))) 
+        end
     end
     on(button_show.clicks) do s
-        if menu_obj.selection[] == "Fig"
+        if menu_show_save.selection[] == "Fig"
             return
-        elseif menu_obj.selection[] == "Cal"
+        elseif menu_show_save.selection[] == "Cal"
             display(view_cal(project.calibration.source; lloq_multiplier, dev_acc))
         else
             display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
@@ -136,17 +165,19 @@ function plot_cal!(project::Project;
         #Main.vscodedisplay(project.calibration.source[project.calibration.source.include])
     end
     on(button_save.clicks) do s
-        if menu_obj.selection[] == "Fig"
+        if menu_show_save.selection[] == "Fig"
             save_dialog("Save as", nothing, ["*.png"]; start_folder = pwd()) do f
                 f == "" || save(f, fig; update = false)
             end
             return
-        elseif menu_obj.selection[] == "Cal"
+        elseif menu_show_save.selection[] == "Cal"
             save_dialog("Save as", nothing, ["*.cal"]; start_folder = pwd()) do f
                 f == "" && return
                 basename(f) in readdir(dirname(f)) || mkdir(f)
                 CSV.write(joinpath(f, "calibration.csv"), project.calibration.source)
                 CSV.write(joinpath(f, "config.csv"), Table(; type = [project.calibration.type], zero = [project.calibration.zero], weight = [project.calibration.weight]))
+                CSV.write(joinpath(f, "data.csv"), Table(; formula = [formula_repr_utf8(project.calibration)], weight = [weight_repr_utf8(project.calibration)], LLOQ = [lloq(project)], HLOQ = [hloq(project)],  r_squared = [r2(project.calibration.model)]))
+                save(joinpath(f, "plot.png"), fig; update = false)
             end   
         else
             save_dialog("Save as", nothing, ["*.csv"]; start_folder = pwd()) do f
@@ -157,9 +188,9 @@ function plot_cal!(project::Project;
     fig
 end
 
-get_point_attr(plot_attr::Dict, incl::Bool) = NamedTuple(k => incl ? v[1] : v[2] for (k, v) in get!(plot_attr, :point, Dict(:color => [:blue, :red])))
-get_point_attr(plot_attr::Dict, incl::BitVector) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], incl) : v for (k, v) in get!(plot_attr, :point, Dict(:color => [:blue, :red])))
-get_point_attr(plot_attr::Dict, incl::Vector{Bool}) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], incl) : v for (k, v) in get!(plot_attr, :point, Dict(:color => [:blue, :red])))
+get_point_attr(plot_attr::Dict, incl::Bool) = NamedTuple(k => incl ? v[1] : v[2] for (k, v) in get!(plot_attr, :scatter, Dict(:color => [:blue, :red])))
+get_point_attr(plot_attr::Dict, incl::BitVector) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], incl) : v for (k, v) in get!(plot_attr, :scatter, Dict(:color => [:blue, :red])))
+get_point_attr(plot_attr::Dict, incl::Vector{Bool}) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], incl) : v for (k, v) in get!(plot_attr, :scatter, Dict(:color => [:blue, :red])))
 
 function weight_repr(cal::Calibration)
     cal.weight in [-0.5, -1, -2] || (cal.weight = 0)
@@ -199,3 +230,8 @@ function formula_repr(cal::Calibration)
         string("y = ", round(β[1]; sigdigits = 4), op[1], abs(round(β[2]; sigdigits = 4)), "x", op[2], abs(round(β[3]; sigdigits = 4)), "x²")
     end
 end
+
+formula_repr_utf8(cal::Calibration) = replace(formula_repr(cal), "x²" => "x^2")
+weight_repr_utf8(cal::Calibration) = replace(weight_repr(cal), "x²" => "x^2", "√x" => "x^0.5")
+vectorize(x::AbstractVector) = x
+vectorize(x) = [x]
