@@ -119,8 +119,8 @@ function cretical_point(cal::Calibration)
 end
 
 cal_range(project::Project) = cal_range(project.calibration)
-cal_range(cal::Calibration) = (lloq(cal), hloq(cal))
+cal_range(cal::Calibration) = (lloq(cal), uloq(cal))
 lloq(project::Project) = lloq(project.calibration)
-hloq(project::Project) = hloq(project.calibration)
+uloq(project::Project) = uloq(project.calibration)
 lloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) < 0) ? cal.source.x[findfirst(cal.source.include)] : max(cal.source.x[findfirst(cal.source.include)], cretical_point(cal))
-hloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) > 0) ? cal.source.x[findlast(cal.source.include)] : min(cal.source.x[findlast(cal.source.include)], cretical_point(cal))
+uloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) > 0) ? cal.source.x[findlast(cal.source.include)] : min(cal.source.x[findlast(cal.source.include)], cretical_point(cal))

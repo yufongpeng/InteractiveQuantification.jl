@@ -23,8 +23,8 @@ function view_cal(tbl::Table; lloq_multiplier = 4//3, dev_acc = 0.15)
     )
 end
 
-function view_sample(tbl::Table; lloq, hloq, lloq_multiplier = 4//3, dev_acc = 0.15)
-    c = [(i >= lloq * (1 - dev_acc * lloq_multiplier) && i <= hloq * (1 + dev_acc)) ? "honeydew" : "lightpink" for i in tbl.x̂]
+function view_sample(tbl::Table; lloq, uloq, lloq_multiplier = 4//3, dev_acc = 0.15)
+    c = [(i >= lloq * (1 - dev_acc * lloq_multiplier) && i <= uloq * (1 + dev_acc)) ? "honeydew" : "lightpink" for i in tbl.x̂]
     Plotly.plot(
         table(
             header = attr(values = ["Sample", "y", "predicted x"],

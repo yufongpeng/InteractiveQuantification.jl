@@ -49,7 +49,7 @@ function plot_cal!(project::Project;
     menu_obj = Menu(fig, options = collect(keys(objs)), default = "axis", halign = :left)
     button_confirm = Button(fig, label = "confirm", halign = :left)    
     textbox_attr = Textbox(fig, placeholder = "attribute", tellwidth = false, halign = :left)
-    textbox_value = Textbox(fig, placeholder = "value(julia exoression)", tellwidth = false, halign = :left)
+    textbox_value = Textbox(fig, placeholder = "value (julia expression)", tellwidth = false, halign = :left)
     fig[1, 2] = vgrid!(
         label_r2,
         label_formula,
@@ -76,7 +76,7 @@ function plot_cal!(project::Project;
     yr = extrema(project.calibration.source.y[findall(project.calibration.source.include)]) .* ((1 - dev_acc * lloq_multiplier), (1 + dev_acc))
     yr = yr .+ (yr[2] - yr[1]) .* (-0.05, 0.05)
     limits!(ax, xr, yr)
-    #display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
+    #display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], uloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
     # Main.vscodedisplay(project.calibration.source[project.calibration.source.include])
     # fig[1, 3] = vgrid!(map(s -> Label(fig, s; halign = :left), split(sprint(showtable, project.calibration.source), "\n"))...; tellheight = false, width = 250)
     function update!()
@@ -160,7 +160,7 @@ function plot_cal!(project::Project;
         elseif menu_show_save.selection[] == "Cal"
             display(view_cal(project.calibration.source; lloq_multiplier, dev_acc))
         else
-            display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], hloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
+            display(view_sample(project.sample; lloq = project.calibration.source.x[findfirst(project.calibration.source.include)], uloq = project.calibration.source.x[findlast(project.calibration.source.include)], lloq_multiplier, dev_acc))
         end
         #Main.vscodedisplay(project.calibration.source[project.calibration.source.include])
     end
@@ -176,7 +176,7 @@ function plot_cal!(project::Project;
                 basename(f) in readdir(dirname(f)) || mkdir(f)
                 CSV.write(joinpath(f, "calibration.csv"), project.calibration.source)
                 CSV.write(joinpath(f, "config.csv"), Table(; type = [project.calibration.type], zero = [project.calibration.zero], weight = [project.calibration.weight]))
-                CSV.write(joinpath(f, "data.csv"), Table(; formula = [formula_repr_utf8(project.calibration)], weight = [weight_repr_utf8(project.calibration)], LLOQ = [lloq(project)], HLOQ = [hloq(project)],  r_squared = [r2(project.calibration.model)]))
+                CSV.write(joinpath(f, "data.csv"), Table(; formula = [formula_repr_utf8(project.calibration)], weight = [weight_repr_utf8(project.calibration)], LLOQ = [format_number(lloq(project))], ULOQ = [format_number(uloq(project))],  r_squared = [format_number(r2(project.calibration.model))]))
                 save(joinpath(f, "plot.png"), fig; update = false)
             end   
         else
@@ -223,11 +223,11 @@ function formula_repr(cal::Calibration)
         b < 0 ? " - " : " + "
     end
     if cal.type
-        string("y = ", round(β[1]; sigdigits = 4), op[1], abs(round(β[2]; sigdigits = 4)), "x")
+        string("y = ", format_number(β[1]), op[1], abs(format_number(β[2])), "x")
     elseif cal.zero
-        string("y = ", round(β[1]; sigdigits = 4), "x", op[1], abs(round(β[2]; sigdigits = 4)), "x²")
+        string("y = ", format_number(β[1]), "x", op[1], abs(format_number(β[2])), "x²")
     else
-        string("y = ", round(β[1]; sigdigits = 4), op[1], abs(round(β[2]; sigdigits = 4)), "x", op[2], abs(round(β[3]; sigdigits = 4)), "x²")
+        string("y = ", format_number(β[1]), op[1], abs(format_number(β[2])), "x", op[2], abs(format_number(β[3])), "x²")
     end
 end
 
@@ -235,3 +235,8 @@ formula_repr_utf8(cal::Calibration) = replace(formula_repr(cal), "x²" => "x^2")
 weight_repr_utf8(cal::Calibration) = replace(weight_repr(cal), "x²" => "x^2", "√x" => "x^0.5")
 vectorize(x::AbstractVector) = x
 vectorize(x) = [x]
+format_number(x; digits) = format_number2int(round(x; digits))
+format_number(x; sigdigits = 4) = format_number2int(round(x; sigdigits))
+format_number2int(x) = 
+    x == round(x) ? round(Int, x) : x
+
