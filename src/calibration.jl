@@ -1,3 +1,4 @@
+#=
 get_formula(cal::Calibration) = get_formula(cal.type, cal.zero)
 get_formula(type::Bool, zero::Bool) = if type 
     zero ? @formula(y ~ 0 + x) : @formula(y ~ x)
@@ -124,3 +125,4 @@ lloq(project::Project) = lloq(project.calibration)
 uloq(project::Project) = uloq(project.calibration)
 lloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) < 0) ? cal.source.x[findfirst(cal.source.include)] : max(cal.source.x[findfirst(cal.source.include)], cretical_point(cal))
 uloq(cal::Calibration) = (cal.type || last(cal.model.model.pp.beta0) > 0) ? cal.source.x[findlast(cal.source.include)] : min(cal.source.x[findlast(cal.source.include)], cretical_point(cal))
+=#
