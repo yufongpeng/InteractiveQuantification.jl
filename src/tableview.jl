@@ -23,8 +23,11 @@ function view_cal(tbl::Table; lloq_multiplier = 4//3, dev_acc = 0.15)
     )
 end
 
-function view_sample(tbl::Table; lloq, uloq, lloq_multiplier = 4//3, dev_acc = 0.15)
-    c = [(i >= lloq * (1 - dev_acc * lloq_multiplier) && i <= uloq * (1 + dev_acc)) ? "honeydew" : "lightpink" for i in tbl.x̂]
+function view_sample(at::AnalysisTable, analyte; lloq, uloq, lloq_multiplier = 4//3, dev_acc = 0.15)
+    x = getanalyte(at.estimated_concentration, analyte)
+    y = getanalyte(at.relative_signal, analyte)
+    id = at.sample
+    c = [(i >= lloq * (1 - dev_acc * lloq_multiplier) && i <= uloq * (1 + dev_acc)) ? "honeydew" : "lightpink" for i in x]
     Plotly.plot(
         table(
             header = attr(values = ["Sample", "y", "predicted x"],
@@ -32,7 +35,7 @@ function view_sample(tbl::Table; lloq, uloq, lloq_multiplier = 4//3, dev_acc = 0
                         fill_color = "limegreen",
                         align = "center"),
             cells = attr(
-                values = [tbl.id, round.(tbl.y; sigdigits = 4), round.(tbl.x̂; sigdigits = 4)],
+                values = [id, round.(y; sigdigits = 4), round.(x; sigdigits = 4)],
                 line_color = "darkgreen",
                 fill_color = [c],
                 align = "right"

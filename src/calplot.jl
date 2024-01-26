@@ -16,7 +16,7 @@ function plot!(batch::Batch;
     plot_attrs = map(plot_attr, batch.calibration)
     i = 1
     function draw()
-        label_analyte = Label(fig, string(first(batch.calibration[i].analyte)); halign = :left)
+        label_analyte = Label(fig, string(first(batch.calibration[i].analyte)); halign = :left, width = 250)
         button_left = Button(fig, label = "<")
         button_right = Button(fig, label = ">")
         label_r2 = Label(fig, "R² = $(round(r2(batch.calibration[i].model); sigdigits = 4))"; halign = :left)
@@ -26,7 +26,8 @@ function plot!(batch::Batch;
         default_w = weight_repr(batch.calibration[i])
         menu_wt = Menu(fig, options = ["none", "1/√x", "1/x", "1/x²"], default = default_w)
         menu_zoom = Menu(fig, options = string.(0:length(unique(batch.calibration[i].table.x))), default = "0", tellwidth = false)
-        menu_show_export = Menu(fig, options = ["Fig", "Cal", "Fig&Cal", "All"], default = "Cal"; width = 70)
+        menu_show = Menu(fig, options = ["Cal", "Sample"], default = "Cal"; halign = :left, tellwidth = false)
+        menu_export = Menu(fig, options = ["Fig", "Cal", "Fig&Cal"], default = "Cal"; halign = :left, tellwidth = false)
         ax = Axis(fig[1, 1]; axis_attrs[i]...)
         sc = scatter!(ax, batch.calibration[i].table.x, batch.calibration[i].table.y; get_point_attr(plot_attrs[i], batch.calibration[i])...)
         DataInspector(sc)
@@ -36,7 +37,6 @@ function plot!(batch::Batch;
         xrange = Table(; x = collect(LinRange(extrema(xlevel)..., convert(Int, reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100))))
         ln = lines!(ax, xrange.x, predict(batch.calibration[i].model, xrange); get!(plot_attrs[i], :line, Dict(:color => :chartreuse))...)
         tall = Toggle(fig, active = true)
-        lall = Label(fig, "All"; halign = :right)
         objs = Dict(:axis => ax, :scatter => sc, :line => ln)
         menu_obj = Menu(fig, options = collect(keys(objs)), default = "axis", halign = :left)
         button_confirm = Button(fig, label = "confirm", halign = :left)    
@@ -49,11 +49,10 @@ function plot!(batch::Batch;
         ltype = Label(fig, "Type")
         lzero = Label(fig, "Zero")
         lweight = Label(fig, "Weight")
-        lps = Label(fig, "Plot setting", halign = :left, tellwidth = false)
-        ls = Label(fig, "Show and Export", halign = :left)
+        lps = Label(fig, "Plot setting\t(Apply all)", halign = :left, tellwidth = false)
         lc = [label_analyte, button_left, button_right, label_r2, label_formula, lzoom, menu_zoom, 
-            ltype, menu_type, lzero, menu_zero, lweight, menu_wt, lps, tall, lall, menu_obj, textbox_attr, button_confirm, textbox_value, 
-            ls, menu_show_export, button_show, button_export, button_save]
+            ltype, menu_type, lzero, menu_zero, lweight, menu_wt, lps, tall, menu_obj, textbox_attr, button_confirm, textbox_value, 
+            menu_show, menu_export, button_show, button_export, button_save]
         fig[1, 2] = vgrid!(
             label_analyte, 
             hgrid!(button_left, button_right),
@@ -63,12 +62,12 @@ function plot!(batch::Batch;
             hgrid!(ltype, menu_type), 
             hgrid!(lzero, menu_zero),
             hgrid!(lweight, menu_wt),
-            hgrid!(lps, tall, lall),
+            hgrid!(lps, tall),
             menu_obj, 
             hgrid!(textbox_attr, button_confirm),
             textbox_value,
-            ls,
-            hgrid!(menu_show_export, button_show, button_export), 
+            hgrid!(menu_show, button_show), 
+            hgrid!(menu_export, button_export), 
             button_save;
             tellheight = false
         )
@@ -88,6 +87,7 @@ function plot!(batch::Batch;
             batch.calibration[i].formula = ChemistryQuantitativeAnalysis.getformula(batch.calibration[i])
             ChemistryQuantitativeAnalysis.calfit!(batch.calibration[i])
             inv_predict_accuracy!(batch.calibration[i])
+            update_quantification!(batch)
             #update_calibration!(batch.calibration[i], batch.method)
             ln.input_args[2][] = predict(batch.calibration[i].model, xrange)
             label_r2.text = "R² = $(round(r2(batch.calibration[i].model); sigdigits = 4))"
@@ -204,22 +204,20 @@ function plot!(batch::Batch;
             end
         end
         on(button_show.clicks) do s
-            if menu_show_export.selection[] == "Fig"
-                return
-            elseif menu_show_export.selection[] == "Cal"
+            if menu_show.selection[] == "Cal"
                 display(view_cal(batch.calibration[i].table; lloq_multiplier, dev_acc))
             else
-                display(view_sample(batch.data; lloq = batch.calibration[i].table.x[findfirst(batch.calibration[i].table.include)], uloq = batch.calibration[i].table.x[findlast(batch.calibration[i].table.include)], lloq_multiplier, dev_acc))
+                display(view_sample(batch.data, first(batch.calibration[i].analyte); lloq = batch.calibration[i].table.x[findfirst(batch.calibration[i].table.include)], uloq = batch.calibration[i].table.x[findlast(batch.calibration[i].table.include)], lloq_multiplier, dev_acc))
             end
             #Main.vscodedisplay(batch.calibration[i].table[batch.calibration[i].table.include])
         end
         on(button_export.clicks) do s
-            if menu_show_export.selection[] == "Fig" || menu_show_export.selection[] == "Fig&Cal"
+            if menu_export.selection[] == "Fig" || menu_export.selection[] == "Fig&Cal"
                 save_dialog("Save as", nothing, ["*.png"]; start_folder = pwd()) do f
                     f == "" || save(f, fig; update = false)
                 end
             end
-            if menu_show_export.selection[] == "Cal" || menu_show_export.selection[] == "Fig&Cal"
+            if menu_export.selection[] == "Cal" || menu_export.selection[] == "Fig&Cal"
                 save_dialog("Save as", nothing, ["*.csv"]; start_folder = pwd()) do f
                     f == "" || CSV.write(f, Table(; formula = [formula_repr_utf8(batch.calibration[i])], weight = [weight_repr_utf8(batch.calibration[i])], LLOQ = [format_number(lloq(batch.calibration[i]))], ULOQ = [format_number(uloq(batch.calibration[i]))],  r_squared = [format_number(r2(batch.calibration[i].model))]))
                 end
@@ -259,53 +257,5 @@ end
 get_point_attr(plot_attr::Dict, cal::MultipleCalibration) = NamedTuple(k => isa(v, Vector) ? map(inc -> inc ? v[1] : v[2], cal.table.include) : v for (k, v) in get!(plot_attr, :scatter, Dict(:color => [:blue, :red])))
 #get_axis_attr(axis_attr::Dict, cal::MultipleCalibration) = NamedTuple(k => v isa Function ? v(cal) : v for (k, v) in axis_attr)
 
-#=
-function weight_repr(cal::Calibration)
-    cal.weight in [-0.5, -1, -2] || (cal.weight = 0)
-    weight_repr(cal.weight)
-end
-weight_repr(weight::Number) = if weight == -0.5
-    "1/√x"
-elseif weight == -1
-    "1/x"
-elseif weight == -2
-    "1/x²"
-else
-    "none"
-end
-
-weight_value(weight) = if weight == "1/√x"
-    -0.5
-elseif weight == "1/x"
-    -1
-elseif weight == "1/x²"
-    -2
-else
-    0
-end
-
-function formula_repr(cal::Calibration)
-    β = cal.model.model.pp.beta0
-    cal.type && cal.zero && return "y = $(round(β[1]; sigdigits = 4))x"
-    op = map(β[2:end]) do b
-        b < 0 ? " - " : " + "
-    end
-    if cal.type
-        string("y = ", format_number(β[1]), op[1], abs(format_number(β[2])), "x")
-    elseif cal.zero
-        string("y = ", format_number(β[1]), "x", op[1], abs(format_number(β[2])), "x²")
-    else
-        string("y = ", format_number(β[1]), op[1], abs(format_number(β[2])), "x", op[2], abs(format_number(β[3])), "x²")
-    end
-end
-
-formula_repr_utf8(cal::Calibration) = replace(formula_repr(cal), "x²" => "x^2")
-weight_repr_utf8(cal::Calibration) = replace(weight_repr(cal), "x²" => "x^2", "√x" => "x^0.5")
-
-format_number(x; digits) = format_number2int(round(x; digits))
-format_number(x; sigdigits = 4) = format_number2int(round(x; sigdigits))
-format_number2int(x) = 
-    x == round(x) ? round(Int, x) : x
-=#
 vectorize(x::AbstractVector) = x
 vectorize(x) = [x]
