@@ -1,4 +1,4 @@
-function plot!(batch::Batch;
+function interactive_calibrate!(batch::Batch;
                 lloq_multiplier = 4//3, dev_acc = 0.15,
                 fig_attr = Dict{Symbol, Any}(:resolution => (1350, 900)), 
                 axis_attr = cal -> Dict(:title => string(first(cal.analyte)), :xlabel => "Concentration (nM)", :ylabel => "Abundance", :titlesize => 20), 
@@ -36,7 +36,7 @@ function plot!(batch::Batch;
         yscale = -reduce(-, extrema(batch.calibration[i].table.y))
         xrange = Table(; x = collect(LinRange(extrema(xlevel)..., convert(Int, reduce(-, extrema(xlevel)) ÷ maximum(xlevel[1:end - 1] .- xlevel[2:end]) * 100))))
         ln = lines!(ax, xrange.x, predict(batch.calibration[i].model, xrange); get!(plot_attrs[i], :line, Dict(:color => :chartreuse))...)
-        tall = Toggle(fig, active = true)
+        tall = Menu(fig, options = ["All plots", "This plot"], default = "All plots")
         objs = Dict(:axis => ax, :scatter => sc, :line => ln)
         menu_obj = Menu(fig, options = collect(keys(objs)), default = "axis", halign = :left)
         button_confirm = Button(fig, label = "confirm", halign = :left)    
@@ -49,7 +49,7 @@ function plot!(batch::Batch;
         ltype = Label(fig, "Type")
         lzero = Label(fig, "Zero")
         lweight = Label(fig, "Weight")
-        lps = Label(fig, "Plot setting\t(Apply all)", halign = :left, tellwidth = false)
+        lps = Label(fig, "Plot setting", halign = :left, tellwidth = false)
         lc = [label_analyte, button_left, button_right, label_r2, label_formula, lzoom, menu_zoom, 
             ltype, menu_type, lzero, menu_zero, lweight, menu_wt, lps, tall, menu_obj, textbox_attr, button_confirm, textbox_value, 
             menu_show, menu_export, button_show, button_export, button_save]
@@ -80,15 +80,8 @@ function plot!(batch::Batch;
         # Main.vscodedisplay(batch.calibration[i].table[batch.calibration[i].table.include])
         # fig[1, 3] = vgrid!(map(s -> Label(fig, s; halign = :left), split(sprint(showtable, batch.calibration[i].table), "\n"))...; tellheight = false, width = 250)
         function update!()
-            isd = ChemistryQuantitativeAnalysis.isd_of(batch.method, first(batch.calibration[i].analyte))
-            batch.calibration[i].analyte = (first(batch.calibration[i].analyte), isd)
-            ord = sortperm(batch.method.pointlevel)
-            batch.calibration[i].table.y .= isnothing(isd) ? getanalyte(batch.method.signaltable, first(batch.calibration[i].analyte))[ord] : (getanalyte(batch.method.signaltable, first(batch.calibration[i].analyte)) ./ getanalyte(batch.method.signaltable, isd))[ord]
-            batch.calibration[i].formula = ChemistryQuantitativeAnalysis.getformula(batch.calibration[i])
-            ChemistryQuantitativeAnalysis.calfit!(batch.calibration[i])
-            inv_predict_accuracy!(batch.calibration[i])
+            update_calibration!(batch.calibration[i], batch.method)
             update_quantification!(batch)
-            #update_calibration!(batch.calibration[i], batch.method)
             ln.input_args[2][] = predict(batch.calibration[i].model, xrange)
             label_r2.text = "R² = $(round(r2(batch.calibration[i].model); sigdigits = 4))"
             label_formula.text = formula_repr(batch.calibration[i])
@@ -139,7 +132,7 @@ function plot!(batch::Batch;
             update!()
         end
         on(menu_wt.selection) do s
-            batch.calibration[i].weight = weight_value(s)
+            batch.calibration[i].weight = s == "none" ? 0 : weight_value(s) # CQA bug
             update!()
         end
         on(menu_zoom.selection) do s
@@ -166,7 +159,7 @@ function plot!(batch::Batch;
             if menu_obj.selection[] == :scatter
                 attr = Symbol(textbox_attr.stored_string[])
                 isnothing(attr) && return
-                if tall.active[] 
+                if tall.selection[] == "All plots"
                     for j in eachindex(plot_attrs)
                         plot_attrs[j][:scatter][attr] = eval(Meta.parse(textbox_value.stored_string[]))
                     end
@@ -179,7 +172,7 @@ function plot!(batch::Batch;
                 return
             elseif menu_obj.selection[] == :line
                 attr = Symbol(textbox_attr.stored_string[])
-                if tall.active[] 
+                if tall.selection[] == "All plots"
                     for j in eachindex(plot_attrs)
                         plot_attrs[j][:line][attr] = eval(Meta.parse(textbox_value.stored_string[]))
                     end
@@ -188,7 +181,7 @@ function plot!(batch::Batch;
                 end
             elseif menu_obj.selection[] == :axis
                 attr = Symbol(textbox_attr.stored_string[])
-                if tall.active[] 
+                if tall.selection[] == "All plots"
                     for j in eachindex(axis_attrs)
                         axis_attrs[j][attr] = eval(Meta.parse(textbox_value.stored_string[]))
                     end
