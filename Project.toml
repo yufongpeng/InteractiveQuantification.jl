@@ -17,7 +17,7 @@ TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 
 [compat]
 CSV = "0.10"
-ChemistryQuantitativeAnalysis = "0.6"
+ChemistryQuantitativeAnalysis = "0.6, 0.7"
 GLM = "1.9"
 GLMakie = "0.8"
 Plotly = "0.4"
